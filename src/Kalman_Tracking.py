@@ -404,8 +404,8 @@ def main_real( args ):
     
     # Kalman set-up
     dt = 1 / fps
-    cov_z = 80  # assume static covariance measurement
-    cov_dynamics = 10
+    cov_z = 200  # assume static covariance measurement
+    cov_dynamics = 80
     
     t = np.arange( N ) * dt  # time
     model = Linear_Kalman_Black_Box( dt, cov_dynamics, cov_z )

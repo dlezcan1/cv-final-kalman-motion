@@ -405,8 +405,8 @@ def main_real( args ):
     
     # Kalman set-up
     dt = 1 / fps
-    cov_z = 700  # assume static covariance measurement
-    cov_dynamics = 20
+    cov_z = 80 # assume static covariance measurement
+    cov_dynamics = 1 
     
     print( f"cov_dynamics: {cov_dynamics}, cov_z: {cov_z}" )
     

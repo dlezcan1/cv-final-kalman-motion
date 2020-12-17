@@ -132,39 +132,39 @@ def check_valid_roi( image_shape, roi, template_shape ):
 
 def plot_trajecories( x_kalman, y_kalman, x_predicted, y_predicted, x_measured, y_measured,
                      x_actual = None, y_actual = None ):
-    fig = plt.figure()
-    ax1 = fig.add_subplot( 1, 3, 1 )
-    ax1.plot( x_kalman, y_kalman, label = 'kalman' )
-    ax1.plot( x_measured, y_measured, label = 'measured' )
-    ax1.plot( x_predicted, y_predicted, label = 'predicted' )
+    fig_xy = plt.figure()
+    plt.plot( x_kalman, y_kalman, label = 'kalman' )
+    plt.plot( x_measured, y_measured, label = 'measured' )
+    plt.plot( x_predicted, y_predicted, label = 'predicted' )
     if ( x_actual is not None ) and ( y_actual is not None ):
-        ax1.plot( x_actual, y_actual, label = 'actual' )
-    ax1.set_xlabel( 'x' )
-    ax1.set_ylabel( 'y' )
+        plt.plot( x_actual, y_actual, label = 'actual' )
+    plt.xlabel( 'x' )
+    plt.ylabel( 'y' )
     plt.title( 'trajectory' )
     
-    ax2 = fig.add_subplot( 1, 3, 2 )
-    ax2.plot( x_kalman, label = 'Kalman' )
-    ax2.plot( x_measured, label = 'measured' )
-    ax2.plot( x_predicted, label = 'predicted' )
+    fig_xyt = plt.figure()
+    ax1 = fig_xyt.add_subplot( 2, 1, 1 )
+    ax1.plot( x_kalman, label = 'Kalman' )
+    ax1.plot( x_measured, label = 'measured' )
+    ax1.plot( x_predicted, label = 'predicted' )
     if ( x_actual is not None ):
-        ax2.plot( x_actual, label = 'actual' )
-    ax2.set_xlabel( 'frame #' )
-    ax2.set_ylabel( 'x' )
-    ax2.legend()
+        ax1.plot( x_actual, label = 'actual' )
+    ax1.set_xlabel( 'frame #' )
+    ax1.set_ylabel( 'x' )
+    ax1.legend()
     
-    ax3 = fig.add_subplot( 1, 3, 3 )
-    ax3.plot( y_kalman, label = 'Kalman' )
-    ax3.plot( y_measured, label = 'measured' )
-    ax3.plot( y_predicted, label = 'predicted' )
+    ax2 = fig_xyt.add_subplot( 2, 1, 2 )
+    ax2.plot( y_kalman, label = 'Kalman' )
+    ax2.plot( y_measured, label = 'measured' )
+    ax2.plot( y_predicted, label = 'predicted' )
     if ( y_actual is not None ):
-        ax3.plot( y_actual, label = 'actual' )
-    ax3.set_xlabel( 'frame #' )
-    ax3.set_ylabel( 'y' )
+        ax2.plot( y_actual, label = 'actual' )
+    ax2.set_xlabel( 'frame #' )
+    ax2.set_ylabel( 'y' )
     
-    fig.tight_layout()
+    fig_xyt.tight_layout()
     
-    return fig
+    return fig_xy, fig_xyt
 
 # plot_trajectories
 
@@ -404,7 +404,7 @@ def main_real( args ):
     
     # Kalman set-up
     dt = 1 / fps
-    cov_z = 80  # assume static covariance measurement
+    cov_z = 60  # assume static covariance measurement
     cov_dynamics = 20
     
     t = np.arange( N ) * dt  # time
@@ -437,6 +437,7 @@ def main_real( args ):
     while video.isOpened():
         for _ in range( N_skip ):
             ret, frame = video.read()
+            
             # counter update
             i += 1
 
@@ -450,7 +451,7 @@ def main_real( args ):
         
         if i == 0:
             x0, y0 , *_ = meas.feature_matching( frame, template, obj_kp, obj_desc, sift, mask = None,
-                                                 match_method='brute-force' )
+                                                 match_method = 'brute-force' )
             model.setInitialPosition( x0, y0 )  # start with the true location
             x_measured[i] = x0
             y_measured[i] = y0
@@ -525,14 +526,14 @@ def main_real( args ):
     annotate_video_real( video_file, x_kalman, y_kalman, template )
     
     # plot the trajectories
-    fig_t = plot_trajecories( x_kalman, y_kalman, x_predicted, y_predicted, x_measured, y_measured )
+    fig_xy, fig_xyt = plot_trajecories( x_kalman, y_kalman, x_predicted, y_predicted, x_measured, y_measured )
     
     # saving figures
-    fig_t.savefig( video_file.replace( '.mov', '_trajectory.png' ) )
-    mng = plt.get_current_fig_manager()
-    mng.frame.Maximize(True)
-    plt.show()
+    fig_xy.savefig( video_file.replace( '.mov', '_trajectory.png' ) )
     print( 'Saved figure:', video_file.replace( '.mov', '_trajectory.png' ) )
+    
+    fig_xyt.savefig( video_file.replace( '.mov', '_time-trajectory.png' ) )
+    print( 'Saved figure:', video_file.replace( '.mov', '_time-trajectory.png' ) )
     
     # saving files
     results = np.vstack( ( t, x_measured, y_measured, x_predicted, y_predicted, x_kalman, y_kalman ) ).T
@@ -550,7 +551,7 @@ if __name__ == '__main__':
     args['data_dir'] = '../data/real/'
     args['vid_file'] = "hold_square.mov"
 #     args['data_file'] = args['vid_file'].replace( '.mov', '.csv' )
-    args['template_file'] = args['vid_file'].replace( '.mov', '_template.png' )
+    args['template_file'] = args['vid_file'].replace( '.mov', '_template2.png' )
     args['N_skip'] = 1
 
     main_real( args )

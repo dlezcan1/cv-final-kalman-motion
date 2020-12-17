@@ -405,7 +405,9 @@ def main_real( args ):
     # Kalman set-up
     dt = 1 / fps
     cov_z = 200  # assume static covariance measurement
-    cov_dynamics = 80
+    cov_dynamics = 150
+    
+    print( f"cov_dynamics: {cov_dynamics}, cov_z: {cov_z}" )
     
     t = np.arange( N ) * dt  # time
     model = Linear_Kalman_Black_Box( dt, cov_dynamics, cov_z )
@@ -430,10 +432,10 @@ def main_real( args ):
     # perform the Kalman tracking
     i = -1
     t0 = time.time()
-    print( 'Beginning Kalman filtering' )
+    print( '\nBeginning Kalman filtering' )
     if N_skip > 1:
         print( f"Will skip every {N_skip} frames" )
-    print( f'Will update every {N_update} iterations...' )
+    print( f'Will update every {N_update} iterations...', end = '\n\n' )
     while video.isOpened():
         for _ in range( N_skip ):
             ret, frame = video.read()

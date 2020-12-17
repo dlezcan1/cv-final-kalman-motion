@@ -1,0 +1,2 @@
+    cov_dynamics = 150
+    cov_z = 200  # assume static covariance measurement

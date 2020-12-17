@@ -309,7 +309,7 @@ def find_subimg_matches( template, image, roi ):
 # find_subimg_matches
 
 
-def feature_matching( image, obj_kp, obj_desc, feature_detector: cv2.Feature2D, mask = None,
+def feature_matching( image, template, obj_kp, obj_desc, feature_detector: cv2.Feature2D, mask = None,
                       match_method = 'flann' ):
     ''' Method to perform feature detection
         
@@ -327,8 +327,8 @@ def feature_matching( image, obj_kp, obj_desc, feature_detector: cv2.Feature2D, 
                     
     
     '''
-    # gray scal the image
-    image_gray = cv2.cvtColor( image. cv2.COLOR_BGR2GRAY )
+    # gray scale the image
+    image_gray = cv2.cvtColor( image, cv2.COLOR_BGR2GRAY )
     
     # begin feature detection
     img_kp, img_desc = feature_detector.detectAndCompute( image_gray, mask )
@@ -341,38 +341,69 @@ def feature_matching( image, obj_kp, obj_desc, feature_detector: cv2.Feature2D, 
         search_params = dict( checks = 50 )   
         
         # create flann matcher
-        flann = cv2.FlannBasedMatcher( index_params, search_params )
-        
-        # begin feature matching
-        matches = flann.knnMatch( obj_desc, img_desc, k = 2 )
-        good_matches = [m for m, n in matches if m.distance < 0.7 * n.distance]  # filter out for good matches
-    
-        # grab keypoint matches 
-        keypts_obj = []
-        keypts_img = []
-        for idx in range( len( good_matches ) ):
-            keypt_obj, keypt_img = get_keypoint_coord_from_match( good_matches, obj_kp, img_kp, idx )
-            keypts_obj.append( keypt_obj )
-            keypts_img.append( keypt_img )
-            
-        # for
-        keypts_obj = np.array( keypts_obj )
-        keypts_img = np.array( keypts_img )
-        
-        # get affine transform 
-        xform = get_affine_transform( keypts_obj, keypts_img )
-        
-        x_trans = xform[0, -1]
-        y_trans = xform[1, -1]
+        matcher = cv2.FlannBasedMatcher( index_params, search_params )
         
     # if
+    
+    elif match_method == 'brute-force':
+        matcher = cv2.BFMatcher_create()
+        
+    # elif
     
     else: 
         raise NotImplementedError( f"'{match_method}' not an implemented matching method" )
     
     # else
+        
+    matches = matcher.knnMatch( obj_desc, img_desc, k = 2 )
+    good_matches = [m for m, n in matches if m.distance < 0.8 * n.distance]  # filter out for good matches
+
+    # grab keypoint matches 
+    keypts_obj = []
+    keypts_img = []
+    for idx in range( len( good_matches ) ):
+        keypt_obj, keypt_img = get_keypoint_coord_from_match( good_matches, obj_kp, img_kp, idx )
+        keypts_obj.append( keypt_obj )
+        keypts_img.append( keypt_img )
+        
+    # for
+    keypts_obj = np.array( keypts_obj )
+    keypts_img = np.array( keypts_img )
     
-    return x_trans, y_trans, xform
+    # get affine transform 
+    ransac_num_samples = 6
+    if len( good_matches ) >= ransac_num_samples:
+        xform, _, ransac_matches = ransac( good_matches, obj_kp, img_kp, num_samples = ransac_num_samples )  
+        pt_temp_com = np.array( [template.shape[1], template.shape[0]] ).reshape( 1, 1, 2 ) / 2 
+        pt_img_com = cv2.transform( pt_temp_com, xform ).squeeze()
+        x_com = pt_img_com[0]
+        y_com = pt_img_com[1]
+        
+        image_match = cv2.drawMatches( template, obj_kp, image, img_kp, ransac_matches, None )
+        
+    # if
+    
+    elif len( good_matches ) > 0:
+        xform = get_affine_transform( keypts_obj, keypts_img )
+        pt_temp_com = np.array( [template.shape[1], template.shape[0]] ).reshape( 1, 1, 2 ) / 2 
+        pt_img_com = cv2.transform( pt_temp_com, xform ).squeeze()
+        x_com = pt_img_com[0]
+        y_com = pt_img_com[1]
+        
+        image_match = cv2.drawMatches( template, obj_kp, image, img_kp, good_matches, None )
+        
+    # elif
+        
+    else: 
+        x_com, y_com = ( None, None )
+        xform = None
+        image_match = None
+        
+    # else
+        
+    # if
+    
+    return x_com, y_com, xform, image_match
     
 # feature_matching
 
@@ -394,10 +425,10 @@ def get_affine_transform( src, dst ):
     A = np.zeros( ( 2 * src.shape[0], 6 ) )
     b = dst.reshape( -1 )
     
-    src_h = np.hstack( ( src, np.ones( src.shape[0], 1 ) ) )  # homogeneous coords
+    src_h = np.hstack( ( src, np.ones( ( src.shape[0], 1 ) ) ) )  # homogeneous coords
     
     A[0::2,:3] = src_h
-    A[1::2,:3] = src_h
+    A[1::2, 3:] = src_h
     
     # perform least squares
     t_vect, *_ = np.linalg.lstsq( A, b, rcond = None )
@@ -479,6 +510,62 @@ def normxcorr2( template, image, mode = 'valid' ):
     return retval
     
 # normxcorr2
+
+
+def ransac( matches, kp1, kp2, num_samples: int = 6, num_trials: int = 3000,
+           inlier_thresh: int = 5 ):
+    
+    # Some parameters
+    total_matches = len( matches )
+    
+    # To keep track of the best transformation
+    xform = np.zeros( ( 3, 3 ) )
+    most_inliers = 0
+
+    # turn the keypts into a numpy array: rows are the x-y coordinates
+    keypts1 = []
+    keypts2 = []
+    for idx in range( total_matches ):
+        keypt1, keypt2 = get_keypoint_coord_from_match( matches, kp1, kp2, idx )
+        
+        keypts1.append( keypt1 )
+        keypts2.append( keypt2 )
+    # for
+    
+    keypts1 = np.array( keypts1 ).astype( np.float32 )
+    keypts2 = np.array( keypts2 ).astype( np.float32 )
+    inlier_matches = None
+    # Loop through num_trials times
+    for i in range( num_trials ):
+
+        # Randomly choose num_samples indices from total number of matches
+        choices = np.random.choice( total_matches, num_samples, replace = False )
+
+        # Get the matching keypoint coordinates from those indices
+        keypts1_choice = keypts1[choices,:]
+        keypts2_choice = keypts2[choices,:]
+
+        # get homography   
+        xform_i = get_affine_transform( keypts1_choice, keypts2_choice )
+
+        # count the number of inliers
+        keypts1_xform_i = cv2.transform( np.expand_dims( keypts1, axis = 1 ), xform_i ).squeeze()
+        dists_i = la.norm( keypts1_xform_i - keypts2, axis = 1 )
+        num_inliers = np.count_nonzero( dists_i <= inlier_thresh )
+
+        # If for this transformation we have found the most inliers update most_inliers and xform
+        if num_inliers > most_inliers:
+            most_inliers = num_inliers
+            xform = np.copy( xform_i )
+            inlier_matches = np.array( matches )[dists_i <= inlier_thresh].tolist()
+
+        # if
+
+    # for
+    
+    return xform, most_inliers, inlier_matches
+    
+# ransac
 
 
 def template_correlate( template, image ):
@@ -777,6 +864,67 @@ def test_hsv_measurement( vid_file ):
 # test_hsv_measurement
 
 
+def test_feature_tracking( vid_file, template_file ):
+    # Set-up
+    vid_stream = cv2.VideoCapture( vid_file )  # open video stream
+    template = cv2.imread( template_file, cv2.IMREAD_ANYCOLOR )
+    template_gray = cv2.cvtColor( template, cv2.COLOR_BGR2GRAY )
+    
+    # video properties
+    width = vid_stream.get( cv2.CAP_PROP_FRAME_WIDTH )
+    height = vid_stream.get( cv2.CAP_PROP_FRAME_HEIGHT )
+    
+    # SIFT
+    print( 'Creating SIFT Feature Detector...' )
+    sift = cv2.SIFT_create()
+    print( 'Computing SIFT Features on template image...' )
+    obj_kp, obj_desc = sift.detectAndCompute( template_gray, None )
+    print( 'Computed template SIFT features!', end = '\n\n' )
+    
+    # iterate through the video stream
+    while vid_stream.isOpened():
+        ret, frame = vid_stream.read()
+        
+        if not ret:
+            print( 'No frame left.' )
+            break
+        
+        # if
+        
+        # feature tracking
+        x_com, y_com, xform, frame_match = feature_matching( frame, template,
+                                                             obj_kp, obj_desc,
+                                                             sift, mask = None,
+                                                             match_method = 'brute-force' )
+        
+        # display results
+        if frame_match is not None:
+            frame_match = cv2.resize( frame_match, ( frame_match.shape[1] // 2, frame_match.shape[0] // 2 ) )
+            cv2.imshow( 'SIFT matches', frame_match )
+            
+        # if
+        if x_com is not None and y_com is not None:
+            frame = cv2.circle( frame, ( int( x_com ), int( y_com ) ), 5, [0, 0, 255], -1 )
+            frame = cv2.resize( frame, ( frame.shape[1] // 2, frame.shape[0] // 2 ) )
+        
+            cv2.imshow( 'annotated video', frame )
+            if cv2.waitKey( 1 ) & 0xFF == ord( 'q' ):
+                break
+            
+            # if 
+        # if
+        
+    # while
+    
+    vid_stream.release()
+
+# test_feature_tracking
+
+
 if __name__ == '__main__':
-    test_hsv_measurement( '../data/Ball_Drop_real.mov' )
+#     test_hsv_measurement( '../data/Ball_Drop_real.mov' )
+    data_dir = '../data/real/'
+    vid_file = data_dir + 'hold_square.mov'
+    template_file = vid_file.replace( '.mov', '_template2.png' )
+    test_feature_tracking( vid_file, template_file )
     print( 'Program terminated.' )

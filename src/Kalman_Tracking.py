@@ -94,6 +94,7 @@ def annotate_video_real( video_in_file, x, y, template ):
         frame = cv2.circle( frame, ( x_i, y_i ), 8, ( 0, 0, 255 ), -1 )
         
         video_out.write( frame )
+        frame = cv2.resize( frame, ( frame.shape[1] // 2, frame.shape[0] // 2 ) )
         cv2.imshow( 'annotated video:', frame )
         
         if cv2.waitKey( 5 ) & 0xFF == ord( 'q' ):
@@ -405,7 +406,7 @@ def main_real( args ):
     # Kalman set-up
     dt = 1 / fps
     cov_z = 200  # assume static covariance measurement
-    cov_dynamics = 150
+    cov_dynamics = 1
     
     print( f"cov_dynamics: {cov_dynamics}, cov_z: {cov_z}" )
     

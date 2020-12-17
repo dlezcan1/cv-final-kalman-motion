@@ -134,9 +134,9 @@ def check_valid_roi( image_shape, roi, template_shape ):
 def plot_trajecories( x_kalman, y_kalman, x_predicted, y_predicted, x_measured, y_measured,
                      x_actual = None, y_actual = None ):
     fig_xy = plt.figure()
-    plt.plot( x_kalman, y_kalman, label = 'kalman' )
     plt.plot( x_measured, y_measured, label = 'measured' )
     plt.plot( x_predicted, y_predicted, label = 'predicted' )
+    plt.plot( x_kalman, y_kalman, label = 'kalman' )
     if ( x_actual is not None ) and ( y_actual is not None ):
         plt.plot( x_actual, y_actual, label = 'actual' )
     plt.xlabel( 'x' )
@@ -145,9 +145,9 @@ def plot_trajecories( x_kalman, y_kalman, x_predicted, y_predicted, x_measured, 
     
     fig_xyt = plt.figure()
     ax1 = fig_xyt.add_subplot( 2, 1, 1 )
-    ax1.plot( x_kalman, label = 'Kalman' )
     ax1.plot( x_measured, label = 'measured' )
     ax1.plot( x_predicted, label = 'predicted' )
+    ax1.plot( x_kalman, label = 'Kalman' )
     if ( x_actual is not None ):
         ax1.plot( x_actual, label = 'actual' )
     ax1.set_xlabel( 'frame #' )
@@ -155,9 +155,9 @@ def plot_trajecories( x_kalman, y_kalman, x_predicted, y_predicted, x_measured, 
     ax1.legend()
     
     ax2 = fig_xyt.add_subplot( 2, 1, 2 )
-    ax2.plot( y_kalman, label = 'Kalman' )
     ax2.plot( y_measured, label = 'measured' )
     ax2.plot( y_predicted, label = 'predicted' )
+    ax2.plot( y_kalman, label = 'Kalman' )
     if ( y_actual is not None ):
         ax2.plot( y_actual, label = 'actual' )
     ax2.set_xlabel( 'frame #' )
